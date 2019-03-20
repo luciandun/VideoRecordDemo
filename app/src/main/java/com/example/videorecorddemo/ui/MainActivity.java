@@ -1,4 +1,4 @@
-package com.example.videorecorddemo;
+package com.example.videorecorddemo.ui;
 
 import android.Manifest;
 import android.content.Context;
@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.MediaController;
 import android.widget.VideoView;
 
+import com.example.videorecorddemo.R;
 import com.yanzhenjie.permission.Action;
 import com.yanzhenjie.permission.AndPermission;
 import com.yanzhenjie.permission.Rationale;

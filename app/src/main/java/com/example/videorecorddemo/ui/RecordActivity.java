@@ -1,4 +1,4 @@
-package com.example.videorecorddemo;
+package com.example.videorecorddemo.ui;
 
 import android.content.Intent;
 import android.hardware.Camera;
@@ -17,10 +17,20 @@ import android.widget.Button;
 import android.widget.Chronometer;
 import android.widget.Toast;
 
+import com.example.videorecorddemo.R;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * 录制视频页面
+ * 该页面仅实现了视频录制功能，以后会逐步实现：
+ * 1.摄像头切换
+ * 2.闪光灯开关
+ * 3.手动对焦
+ * 4.自定义视频清晰度
+ */
 public class RecordActivity extends AppCompatActivity implements SurfaceHolder.Callback {
 
     private static final String TAG = "RecordActivity";
