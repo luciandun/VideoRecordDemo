@@ -1,16 +1,25 @@
 package com.example.videorecorddemo.helper;
 
-import android.content.Context;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.widget.Button;
 import android.widget.Chronometer;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.videorecorddemo.ui.MainActivity;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -23,7 +32,12 @@ import java.util.List;
 public class CameraHelper implements ICamera, SurfaceHolder.Callback {
 
     private static final String TAG = "CameraHelper";
-    private Context mContext;
+
+    private Activity mActivity;
+    /**
+     * 默认相机ID取后置相机
+     */
+    private int mCameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
 
     private Camera mCamera;
     private MediaRecorder mRecorder;
@@ -31,73 +45,66 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
     private SurfaceView surfaceView;
     private SurfaceHolder surfaceHolder;
     private Chronometer chronometer;
+    private Button btnRecord;
+    private TextView btnFlash;
 
     private boolean isFrontCamera = true;
-    private String videoPath;
-    private long videoDuration = 60 * 1000; //默认1分钟
+    private boolean isFlashOn;
+    private boolean isRecording;
 
-    private CameraHelper(Context context, SurfaceView surfaceView) {
-        this.mContext = context;
+    private String videoPath;
+    private int videoDuration = 60 * 1000; //默认1分钟
+    private long recordTime;
+
+    private long lastRecordTimestamp;
+    private long lastSwitchTimestamp;
+
+
+    private CameraHelper(Activity activity, SurfaceView surfaceView) {
+        this.mActivity = activity;
         this.surfaceView = surfaceView;
         surfaceHolder = surfaceView.getHolder();
         surfaceHolder.addCallback(this);
     }
 
-    public CameraHelper get(Context context, SurfaceView surfaceView) {
-        return new CameraHelper(context, surfaceView);
+    public static CameraHelper get(Activity activity, SurfaceView surfaceView) {
+        return new CameraHelper(activity, surfaceView);
+    }
+
+    public void setChronometer(Chronometer chronometer) {
+        this.chronometer = chronometer;
+    }
+
+    public void setRecordView(Button btnRecord) {
+        this.btnRecord = btnRecord;
+    }
+
+    public void setFlashView(TextView btnFlash) {
+        this.btnFlash = btnFlash;
     }
 
     @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                initCamera();
-                try {
-                    mCamera.setPreviewDisplay(surfaceHolder);
-                    mCamera.startPreview();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-    }
-
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        if (surfaceView.getHolder() == null) return;
-        if (mCamera == null) return;
-        try {
-            mCamera.stopPreview();
-            mCamera.setPreviewDisplay(surfaceHolder);
-            mCamera.startPreview();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        releaseRecorder();
-        releaseCamera();
-    }
-
-    @Override
-    public void initCamera() {
+    public void openCamera() {
         if (mCamera == null) {
-            if (!mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA)) {
+            if (!mActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA)) {
                 showToast("未发现相机");
                 return;
             }
-            openCamera();
+            int cameras = Camera.getNumberOfCameras();
+            log("cameraCount:" + cameras);
+            mCameraId = cameras >= 2 && isFrontCamera ?
+                    Camera.CameraInfo.CAMERA_FACING_FRONT :
+                    Camera.CameraInfo.CAMERA_FACING_BACK;
+            try {
+                mCamera = Camera.open(mCameraId);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-
         if (mCamera == null) {
-            showToast("未发现相机");
+            showToast("相机功能不可用");
             return;
         }
-
         Camera.Parameters parameters = mCamera.getParameters();
         //设置聚焦模式
         List<String> focusModules = parameters.getSupportedFocusModes();
@@ -109,103 +116,276 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
         } else {
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
         }
-
         //设置预览尺寸
         List<Camera.Size> supportedPreviewSize = parameters.getSupportedPreviewSizes();
         log("supportedPreviewSize = (" + supportedPreviewSize.get(0).width + "," + supportedPreviewSize.get(0).height + ")");
         parameters.setPreviewSize(supportedPreviewSize.get(0).width, supportedPreviewSize.get(0).height);
-
         //开启快速成像
         parameters.setRecordingHint(true);
-
         //是否支持影像稳定能力，支持则开启
         if (parameters.isVideoStabilizationSupported()) {
             parameters.setVideoStabilization(true);
             log("支持影像稳定能力");
         }
 
-        setPreviewOrientation();
-    }
-
-    /**
-     * 设置画面预览的旋转角度
-     */
-    private void setPreviewOrientation() {
-        mCamera.setDisplayOrientation(90);
-    }
-
-    private void openCamera() {
-        int cameraCount = Camera.getNumberOfCameras();
-        log("cameraCount:" + cameraCount);
-        //2个以上摄像头，则可前后切换，否则只有后摄
-        int cameraId = cameraCount >= 2 && isFrontCamera ?
-                Camera.CameraInfo.CAMERA_FACING_FRONT : Camera.CameraInfo.CAMERA_FACING_BACK;
-        mCamera = Camera.open(cameraId);
+        setOrientation();
     }
 
     @Override
-    public void startRecord() {
-
+    public void startPreview() {
+        try {
+            if (mCamera != null) {
+                mCamera.setPreviewDisplay(surfaceHolder);
+                mCamera.startPreview();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
-    public void stopRecord() {
-
+    public void stopPreview() {
+        try {
+            if (mCamera != null)
+                mCamera.stopPreview();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
     public void releaseCamera() {
-
-    }
-
-    @Override
-    public void releaseRecorder() {
-
-    }
-
-    @Override
-    public void toggleFlash(boolean open) {
-
-    }
-
-    @Override
-    public void changeCamera(boolean isFront) {
-        isFrontCamera = isFront;
         if (mCamera != null) {
             mCamera.stopPreview();
             mCamera.release();
-            openCamera();
-            setPreviewOrientation();
+            mCamera = null;
+        }
+    }
+
+    @Override
+    public void startRecord() {
+        if (mRecorder == null)
+            mRecorder = new MediaRecorder();
+        try {
+            if (mCamera != null) {
+                mCamera.unlock();
+                mRecorder.setCamera(mCamera);
+                mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+                mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                CamcorderProfile profile = CamcorderProfile.get(CamcorderProfile.QUALITY_480P);
+                mRecorder.setProfile(profile);
+
+                mRecorder.setMaxDuration(videoDuration);
+                mRecorder.setPreviewDisplay(surfaceHolder.getSurface());
+                mRecorder.setOrientationHint(270);
+
+                File filePath = new File(videoPath);
+                if (!filePath.exists()) {
+                    boolean success = filePath.mkdirs();
+                    if (!success) {
+                        showToast("视频路径创建失败");
+                        return;
+                    }
+                }
+                videoPath = filePath.getAbsolutePath() + File.separator + "video_" + System.currentTimeMillis() + ".mp4";
+                mRecorder.setOutputFile(videoPath);
+                log("videoPath = " + videoPath);
+
+                mRecorder.prepare();
+                mRecorder.start();
+                isRecording = true;
+
+                if (btnRecord != null) {
+                    btnRecord.setText("停止");
+                }
+
+                if (chronometer != null) {
+                    chronometer.setBase(SystemClock.elapsedRealtime() - recordTime);
+                    chronometer.start();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void stopRecord() {
+        if (mRecorder != null) {
             try {
-                mCamera.setPreviewDisplay(surfaceHolder);
-                mCamera.startPreview();
-            } catch (IOException e) {
+                mRecorder.stop();
+                mRecorder.reset();
+                isRecording = false;
+                recordTime = 0;
+
+                if (btnRecord != null) {
+                    btnRecord.setText("开始");
+                }
+
+                if (chronometer != null) {
+                    chronometer.setBase(SystemClock.elapsedRealtime());
+                    chronometer.stop();
+                }
+
+                Intent intent = new Intent(mActivity, MainActivity.class);
+                intent.putExtra("videoPath", videoPath);
+                mActivity.setResult(Activity.RESULT_OK, intent);
+                mActivity.onBackPressed();
+
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
+    /**
+     * 供外部调用
+     */
+    public void startOrStopRecord() {
+        //频繁点击会导致Camera crash
+        long now = System.currentTimeMillis();
+        if (now - lastRecordTimestamp < 2000)
+            return;
+        lastRecordTimestamp = now;
+
+        if (isRecording) {
+            isRecording = false;
+            stopRecord();
+        } else {
+            isRecording = true;
+            startRecord();
+        }
+    }
+
+
     @Override
-    public void setVideoPath(String path) {
-        videoPath = path;
+    public void releaseRecorder() {
+        if (mRecorder != null) {
+            mRecorder.release();
+            mRecorder = null;
+        }
     }
 
     @Override
-    public void setVideoDuration(long duration) {
-        videoDuration = duration;
+    public void toggleFlash() {
+        if (mCamera != null) {
+            Camera.Parameters parameters = mCamera.getParameters();
+            isFlashOn = !isFlashOn;
+            parameters.setFlashMode(isFlashOn ?
+                    Camera.Parameters.FLASH_MODE_ON :
+                    Camera.Parameters.FLASH_MODE_OFF);
+
+            mCamera.setParameters(parameters);
+            if (btnFlash != null) {
+                btnFlash.setText(isFlashOn ? "开灯" : "关灯");
+            }
+        }
+    }
+
+    @Override
+    public void changeCamera() {
+        int cameras = Camera.getNumberOfCameras();
+        if (cameras < 2) {
+            showToast("该设备只有一个摄像头");
+            return;
+        }
+        isFrontCamera = !isFrontCamera;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                releaseCamera();
+                openCamera();
+                startPreview();
+            }
+        }).start();
+    }
+
+    @Override
+    public void setVideoPath(String path) {
+        this.videoPath = path;
+    }
+
+    @Override
+    public void setVideoDuration(int duration) {
+        this.videoDuration = duration;
     }
 
     @Override
     public void destroy() {
+        releaseCamera();
+        releaseRecorder();
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                openCamera();
+                startPreview();
+            }
+        }).start();
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        if (surfaceView.getHolder() == null) return;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                stopPreview();
+                startPreview();
+            }
+        }).start();
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
         releaseRecorder();
         releaseCamera();
-        mCamera = null;
+    }
+
+    /**
+     * 根据当前摄像头调整预览图像方向
+     */
+    private void setOrientation() {
+        if (mCamera != null) {
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            Camera.getCameraInfo(mCameraId, info);
+            int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
+            //获取摄像头角度
+            int degree = 0;
+            switch (rotation) {
+                case Surface.ROTATION_0:
+                    degree = 0;
+                    break;
+                case Surface.ROTATION_90:
+                    degree = 90;
+                    break;
+                case Surface.ROTATION_180:
+                    degree = 180;
+                    break;
+                case Surface.ROTATION_270:
+                    degree = 270;
+                    break;
+            }
+            int result;
+            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                //前置摄像头
+                result = (info.orientation + degree) % 360;
+                result = (360 - result) % 360; //修正镜像
+            } else {
+                //后置摄像头
+                result = (info.orientation - degree + 360) % 360;
+            }
+            mCamera.setDisplayOrientation(result);
+        }
     }
 
     private void showToast(String msg) {
         if (!TextUtils.isEmpty(msg)) {
-            int duration = msg.length() >= 8 ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT;
-            Toast.makeText(mContext, msg, duration).show();
+            int duration = msg.length() > 6 ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT;
+            Toast.makeText(mActivity.getApplicationContext(), msg, duration).show();
         }
     }
 

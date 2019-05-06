@@ -10,6 +10,7 @@ import android.os.SystemClock;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -31,6 +32,7 @@ import java.util.List;
  * 3.手动对焦
  * 4.自定义视频清晰度
  */
+@Deprecated
 public class RecordActivity extends AppCompatActivity implements SurfaceHolder.Callback {
 
     private static final String TAG = "RecordActivity";
@@ -87,7 +89,11 @@ public class RecordActivity extends AppCompatActivity implements SurfaceHolder.C
 
         //设置预览尺寸
         List<Camera.Size> supportedPreviewSize = parameters.getSupportedPreviewSizes();
-        log("supportedPreviewSize = " + supportedPreviewSize.toString());
+        StringBuilder sb = new StringBuilder();
+        for (Camera.Size size : supportedPreviewSize) {
+            sb.append("[").append(size.width).append(",").append(size.height).append("]").append("  ");
+        }
+        log("supportedPreviewSize = " + sb.toString());
         parameters.setPreviewSize(supportedPreviewSize.get(0).width, supportedPreviewSize.get(0).height);
 
         parameters.setRecordingHint(true);
@@ -98,10 +104,39 @@ public class RecordActivity extends AppCompatActivity implements SurfaceHolder.C
             log("支持影像稳定能力");
         }
 
-        mCamera.setDisplayOrientation(90);
+        setDisplayOrientation();
+    }
 
-        log("Camera.Parameters = " + parameters);
-//        mCamera.setParameters(parameters);
+    private void setDisplayOrientation() {
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(Camera.CameraInfo.CAMERA_FACING_FRONT, info);
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        //获取摄像头角度
+        int degree = 0;
+        switch (rotation) {
+            case Surface.ROTATION_0:
+                degree = 0;
+                break;
+            case Surface.ROTATION_90:
+                degree = 90;
+                break;
+            case Surface.ROTATION_180:
+                degree = 180;
+                break;
+            case Surface.ROTATION_270:
+                degree = 270;
+                break;
+        }
+        int result;
+        if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            //前置摄像头
+            result = (info.orientation + degree) % 360;
+            result = (360 - result) % 360; //修正镜像
+        } else {
+            //后置摄像头
+            result = (info.orientation - degree + 360) % 360;
+        }
+        mCamera.setDisplayOrientation(result);
     }
 
     @Override

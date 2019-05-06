@@ -8,23 +8,27 @@ package com.example.videorecorddemo.helper;
  */
 public interface ICamera {
 
-    void initCamera();
+    void openCamera();
+
+    void startPreview();
+
+    void stopPreview();
+
+    void releaseCamera();
 
     void startRecord();
 
     void stopRecord();
 
-    void releaseCamera();
-
     void releaseRecorder();
 
-    void toggleFlash(boolean open);
+    void toggleFlash();
 
-    void changeCamera(boolean isFront);
+    void changeCamera();
 
     void setVideoPath(String path);
 
-    void setVideoDuration(long duration);
+    void setVideoDuration(int duration);
 
     void destroy();
 
