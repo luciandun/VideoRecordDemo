@@ -1,23 +1,16 @@
 package com.example.videorecorddemo.helper;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
-import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.widget.Button;
-import android.widget.Chronometer;
-import android.widget.TextView;
 import android.widget.Toast;
-
-import com.example.videorecorddemo.ui.MainActivity;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,21 +37,24 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
 
     private SurfaceView surfaceView;
     private SurfaceHolder surfaceHolder;
-    private Chronometer chronometer;
-    private Button btnRecord;
-    private TextView btnFlash;
 
     private boolean isFrontCamera = true;
     private boolean isFlashOn;
     private boolean isRecording;
 
     private String videoPath;
-    private int videoDuration = 60 * 1000; //默认1分钟
-    private long recordTime;
+    private int videoDuration = 5 * 60 * 1000; //默认5分钟
+
 
     private long lastRecordTimestamp;
-    private long lastSwitchTimestamp;
 
+    public boolean isRecording() {
+        return isRecording;
+    }
+
+    public String getVideoPath() {
+        return videoPath;
+    }
 
     private CameraHelper(Activity activity, SurfaceView surfaceView) {
         this.mActivity = activity;
@@ -69,18 +65,6 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
 
     public static CameraHelper get(Activity activity, SurfaceView surfaceView) {
         return new CameraHelper(activity, surfaceView);
-    }
-
-    public void setChronometer(Chronometer chronometer) {
-        this.chronometer = chronometer;
-    }
-
-    public void setRecordView(Button btnRecord) {
-        this.btnRecord = btnRecord;
-    }
-
-    public void setFlashView(TextView btnFlash) {
-        this.btnFlash = btnFlash;
     }
 
     @Override
@@ -128,7 +112,7 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
             log("支持影像稳定能力");
         }
 
-        setOrientation();
+        setPreviewOrientation();
     }
 
     @Override
@@ -177,7 +161,7 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
 
                 mRecorder.setMaxDuration(videoDuration);
                 mRecorder.setPreviewDisplay(surfaceHolder.getSurface());
-                mRecorder.setOrientationHint(270);
+                mRecorder.setOrientationHint(getVideoOrientation());
 
                 File filePath = new File(videoPath);
                 if (!filePath.exists()) {
@@ -194,15 +178,6 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
                 mRecorder.prepare();
                 mRecorder.start();
                 isRecording = true;
-
-                if (btnRecord != null) {
-                    btnRecord.setText("停止");
-                }
-
-                if (chronometer != null) {
-                    chronometer.setBase(SystemClock.elapsedRealtime() - recordTime);
-                    chronometer.start();
-                }
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -216,22 +191,6 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
                 mRecorder.stop();
                 mRecorder.reset();
                 isRecording = false;
-                recordTime = 0;
-
-                if (btnRecord != null) {
-                    btnRecord.setText("开始");
-                }
-
-                if (chronometer != null) {
-                    chronometer.setBase(SystemClock.elapsedRealtime());
-                    chronometer.stop();
-                }
-
-                Intent intent = new Intent(mActivity, MainActivity.class);
-                intent.putExtra("videoPath", videoPath);
-                mActivity.setResult(Activity.RESULT_OK, intent);
-                mActivity.onBackPressed();
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -276,9 +235,6 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
                     Camera.Parameters.FLASH_MODE_OFF);
 
             mCamera.setParameters(parameters);
-            if (btnFlash != null) {
-                btnFlash.setText(isFlashOn ? "开灯" : "关灯");
-            }
         }
     }
 
@@ -348,7 +304,7 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
     /**
      * 根据当前摄像头调整预览图像方向
      */
-    private void setOrientation() {
+    private void setPreviewOrientation() {
         if (mCamera != null) {
             Camera.CameraInfo info = new Camera.CameraInfo();
             Camera.getCameraInfo(mCameraId, info);
@@ -380,6 +336,14 @@ public class CameraHelper implements ICamera, SurfaceHolder.Callback {
             }
             mCamera.setDisplayOrientation(result);
         }
+    }
+
+    /**
+     * 获取视频的旋转角度
+     */
+    private int getVideoOrientation() {
+        if (isFrontCamera) return 270;
+        else return 90;
     }
 
     private void showToast(String msg) {
