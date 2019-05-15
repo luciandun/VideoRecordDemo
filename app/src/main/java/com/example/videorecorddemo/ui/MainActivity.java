@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
                 .onGranted(new Action<List<String>>() {
                     @Override
                     public void onAction(List<String> permissions) {
-                        Intent intent = new Intent(MainActivity.this, Record2Activity.class);
+                        Intent intent = new Intent(MainActivity.this, RecordActivity.class);
                         startActivityForResult(intent, REQUEST_CAPTURE);
                     }
                 })

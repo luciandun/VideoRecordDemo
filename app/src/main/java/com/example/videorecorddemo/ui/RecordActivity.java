@@ -15,7 +15,7 @@ import com.example.videorecorddemo.R;
  * 3.手动对焦
  * 4.自定义视频清晰度
  */
-public class Record2Activity extends AppCompatActivity implements RecordFragment.RecordingListener {
+public class RecordActivity extends AppCompatActivity implements RecordFragment.RecordingListener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

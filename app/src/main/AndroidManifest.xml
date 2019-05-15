@@ -18,9 +18,6 @@
         <activity
             android:name=".ui.RecordActivity"
             android:screenOrientation="portrait" />
-        <activity
-            android:name=".ui.Record2Activity"
-            android:screenOrientation="portrait" />
         <activity android:name=".ui.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
