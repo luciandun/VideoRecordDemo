@@ -1,6 +1,7 @@
 package com.example.videorecorddemo.ui;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.media.MediaPlayer;
@@ -12,6 +13,7 @@ import android.widget.MediaController;
 import android.widget.VideoView;
 
 import com.example.videorecorddemo.R;
+import com.example.videorecorddemo.view.ProgressView;
 import com.yanzhenjie.permission.Action;
 import com.yanzhenjie.permission.AndPermission;
 import com.yanzhenjie.permission.Rationale;
@@ -24,12 +26,33 @@ public class MainActivity extends AppCompatActivity {
     private VideoView videoView;
 
     public static final int REQUEST_CAPTURE = 1000;
+    private ProgressView progressView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         videoView = findViewById(R.id.video_view);
+
+        progressView = findViewById(R.id.progress);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        progressView.setProgress(45);
+
+        ValueAnimator valueAnimator = ValueAnimator.ofInt(0, 100);
+        valueAnimator.setDuration(10000);
+        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                Integer value = (Integer) animation.getAnimatedValue();
+                progressView.setProgress(value);
+            }
+        });
+        valueAnimator.start();
+
     }
 
     public void onVideoRecord(View view) {

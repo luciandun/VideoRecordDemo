@@ -20,4 +20,10 @@
         android:onClick="onVideoRecord"
         android:text="录制视频" />
 
+    <com.example.videorecorddemo.view.ProgressView
+        android:id="@+id/progress"
+        android:layout_width="match_parent"
+        android:background="#99000000"
+        android:layout_height="100dp" />
+
 </LinearLayout>
